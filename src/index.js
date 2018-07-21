@@ -36,11 +36,11 @@ class Pdf extends React.Component {
     })
   
   render() {
-    var {page, pages} = this.state
-    var {
+    let { page, pages } = this.state
+    let {
       nextButton, 
       previousButton,
-    } = this.props;    
+    } = this.props;   
    
     return(
       <div className={'pdf-embed'}>

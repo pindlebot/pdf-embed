@@ -6,9 +6,7 @@ import classnames from 'classnames'
 
 class ContentEditable extends React.Component {
   state = {
-    value: Plain.deserialize(
-      (this.props.input && this.props.input.text) || 'Enter some text...'
-    )
+    value: Plain.deserialize('')
   }
   
   onChange = (state) => {
@@ -17,12 +15,30 @@ class ContentEditable extends React.Component {
     })
   }
 
+  componentDidMount () {
+    let { annotation } = this.props
+    if (annotation.text) {
+      this.setState({
+        value: Plain.deserialize(annotation.text)
+      })
+    }
+  }
+
+  shouldComponentUpdate (nextProps, nextState) {
+    return nextState.value !== this.state.value ||
+    nextProps.selected !== this.props.selected ||
+    nextProps.draggable !== this.props.draggable ||
+    nextProps.hover !== this.props.hover
+  }
+
   render() {
-    const { selected, hover } = this.props
+    const { selected, hover, draggable } = this.props
+    console.log({ selected, hover, draggable })
     const className = classnames(
       'pdf-embed-editor',
       selected ? 'pdf-embed-editor-selected' : '',
-      hover ? 'pdf-embed-editor-hover' : ''
+      hover ? 'pdf-embed-editor-hover' : '',
+      draggable ? 'pdf-embed-editor-draggable' : ''
     )
     return (
       <div 

@@ -3,7 +3,6 @@ import PropTypes from 'prop-types'
 import makeCancelable from './makeCancelable'
 import ReactDOM from 'react-dom'
 import AnnotationEditor from './AnnotationEditor'
-import PdfEmbedDropdown from './PdfEmbedDropdown'
 import uuid from 'uuid/v4'
 import findIndex from 'lodash.findindex'
 import createShadow from './createShadow'
@@ -14,7 +13,7 @@ require('pdfjs-dist/web/compatibility')
 class Canvas extends React.Component {
   state = {
     pdf: null,
-    data: [],
+    annotations: [],
     x: null,
     y: null,
     draggable: null,
@@ -46,23 +45,23 @@ class Canvas extends React.Component {
     }
 
     document.addEventListener('keydown', this.onKeyDown)
-    const data = window.localStorage.getItem('data')
+    const annotations = window.localStorage.getItem('annotations')
 
-    if(data) {
+    if(annotations) {
       this.setState({
-        data: JSON.parse(data)
+        annotations: JSON.parse(annotations)
       })
     }
   }
 
   onMouseMove = ({ key }) => {
-    let { data } = this.state
-    const index = findIndex(data, { key })
+    let { annotations } = this.state
+    const index = findIndex(annotations, { key })
 
     return (e) => {  
-      data[index].x = e.pageX
-      data[index].y = e.pageY
-      this.setState({data})
+      annotations[index].x = e.pageX
+      annotations[index].y = e.pageY
+      this.setState({annotations})
     }
   }
 
@@ -132,44 +131,39 @@ class Canvas extends React.Component {
   }
 
   handleMouseMove = (e) => {
-    const { data, draggable } = this.state
+    const { annotations, draggable } = this.state
     
     if(draggable) {
-      const i = findIndex(data, { key: draggable})
-      data[i] = {
-        ...data[i],
+      const i = findIndex(annotations, { key: draggable})
+      annotations[i] = {
+        ...annotations[i],
         x: e.clientX - this.getBoundingClientRect().left,
         y: e.clientY - this.getBoundingClientRect().top,
       }
 
-      this.setState({ x: e.clientX, y: e.clientY, data })
+      this.setState({ x: e.clientX, y: e.clientY, annotations })
     } else {
       this.setState({ x: e.clientX, y: e.clientY })
     }
   }
 
   handleClick = () => {
-    if(
-      this.state.draggable &&
-      this.state.selected
-    ) {
-      this.setState({ draggable: null, selected: null })
-      return
+    let { selected, draggable } = this.state
+    if (selected) {
+      return this.setState({ selected: null, draggable: null })
     }
 
-    const { x, y, data } = this.state
-    const key = uuid()
-    data.push({
+    const { x, y, annotations } = this.state
+    const annotationKey = uuid()
+    annotations.push({
       x: x - this.getBoundingClientRect().left,
       y: y - this.getBoundingClientRect().top,
-      key
+      key: annotationKey
     })
 
-    const i = data.length - 1
-
     this.setState({
-      data,
-      selected: key
+      annotations,
+      selected: annotationKey
     })
   }
 
@@ -193,15 +187,16 @@ class Canvas extends React.Component {
     })
   }
 
-  handleDelete = ({ key }) => {    
-    let { selected, data } = this.state
-    data = data.filter(entry => entry.key !== key)
+  handleDelete = ({ key: annotationKey }) => {    
+    let { selected, annotations, draggable } = this.state
+    if (!draggable) return
+    annotations = annotations.filter(({ key }) => key !== annotationKey)
     this.setState({
-      data,
+      annotations,
       selected: null,
       draggable: null
     }, () => {
-      window.localStorage.setItem('data', JSON.stringify(data))
+      window.localStorage.setItem('annotations', JSON.stringify(annotations))
     })
   }
 
@@ -228,20 +223,23 @@ class Canvas extends React.Component {
 
   onFocus = () => this.setState({ focus: 'SLATE' })
 
-  onBlur = () => this.setState({focus: 'BODY'})
+  onBlur = () => this.setState({ focus: 'BODY' })
 
   update = ({ value, value: { document: { text } } }, { key }) => {
-    const { data } = this.state
-    const i = findIndex(data, { key })
-    const entry = data[i]
-    data[i].text = text
-    this.setState({ data }, () => {
-      window.localStorage.setItem('data', JSON.stringify(this.state.data))
+    const { annotations } = this.state
+    const i = findIndex(annotations, { key })
+    const entry = annotations[i]
+    annotations[i].text = text
+    this.setState({ annotations }, () => {
+      window.localStorage.setItem(
+        'annotations',
+        JSON.stringify(this.state.annotations)
+      )
     })
   }
 
   renderAnnotations = () => {
-    const { data: annotations } = this.state
+    const { annotations: annotations } = this.state
 
     return annotations.map((annotation, i) => 
       <div 
@@ -249,23 +247,23 @@ class Canvas extends React.Component {
         style={{
           transform: `translate3d(${annotation.x}px, ${annotation.y}px, 0px)`
         }}
-        ref={c => { this.wrapper = c }}
+        ref={ref => { this.wrapper = ref }}
         onMouseDown={() => this.startDragging(annotation) }
         onMouseUp={() => this.stopDragging(annotation) }
         onMouseEnter={() => this.onMouseEnter(annotation) }
         onMouseLeave={() => this.onMouseLeave(annotation) }
         onClick={(e) => this.selectAnnotation(e, annotation) }
-        key={`div_${annotation.key}`}
+        key={`${annotation.key}-div`}
       >
         <AnnotationEditor 
-          key={`annotation_${annotation.key}`}
-          input={annotation}
-          defaultPosition={annotation} 
+          key={`${annotation.key}-annotation`}
+          annotation={annotation}
           onFocus={this.onFocus} 
           onBlur={this.onBlur}
           handleDelete={() => this.handleDelete(annotation)} 
           hover={this.state.hover === annotation.key}
-          selected={this.state.selected === annotation.key ? true : false}
+          selected={this.state.selected === annotation.key}
+          draggable={this.state.draggable === annotation.key}
           update={(state) => this.update(state, annotation)}
         />
       </div>
@@ -284,7 +282,7 @@ class Canvas extends React.Component {
       margin: '0 auto',
       ...this.props.containerStyles,
     }
-    const { data: annotations } = this.state
+    const { annotations: annotations } = this.state
     return (
       <div 
         style={containerStyles} 
@@ -294,7 +292,7 @@ class Canvas extends React.Component {
           {this.renderAnnotations()}
         </div>
         <div 
-          className={'pdf-wrapper'}
+          className={'pdf-embed-canvas-wrapper'}
           style={{
             width: `${612 * 2}`,
             height: `${792 * 2}`,
